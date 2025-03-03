@@ -1,53 +1,71 @@
 export const useAuthStore = defineStore('auth', () => {
 	const config = useRuntimeConfig();
 
-	const clientId = config.public.CLIENT_ID;
-	const redirectUrl = config.public.REDIRECT_URL;
-	const spotifyAuthBaseUrl = config.public.SPOTIFY_AUTH_BASE;
-	const authorizationEndpoint = spotifyAuthBaseUrl + '/authorize';
-	const tokenEndpoint = spotifyAuthBaseUrl + '/api/token';
-	const scope = 'user-read-private user-read-email';
+	const EXPIRE_KEY = 'expire';
+	const VERIFIER = 'code_verifier';
+	const REFRESH = 'refresh_token';
+	const ACCESS = 'access_token';
 
-	const codeVerifierCookie = useCookie<string | null>('code_verifier', {
+	const redirectUrl = config.public.REDIRECT_URL;
+	const spotifyAuthBaseUrl = config.public.SPOTIFY_ACCOUNTS_URL;
+	const authorizationEndpoint = spotifyAuthBaseUrl + '/authorize';
+
+	let clientId: string = '';
+
+	useFetch('/api/auth/client').then(({ data }) => {
+		if (data.value?.id) clientId = data.value.id;
+	});
+
+	const codeVerifierCookie = useCookie<string | null>(VERIFIER, {
 		default: () => null,
 	});
 
-	const refreshTokenCookie = useCookie<string | null>('refresh_token', {
+	const refreshTokenCookie = useCookie<string | null>(REFRESH, {
 		default: () => null,
 		secure: true,
 		sameSite: 'strict',
 	});
 
-	const accessToken = ref<string | null>(null);
+	const accessToken = useCookie<string | null>(ACCESS, {
+		default: () => null,
+		secure: true,
+		sameSite: 'strict',
+	});
 
-
+	// Auth state
 	const isAuth = ref<boolean>(false);
 
 	function setAuth(bool: boolean): void {
 		isAuth.value = bool;
 	}
 
+	// Token Expire
+	const expireTime = ref<number>(0);
 
-	// const expireIn = ref<number>(0);
+	if (import.meta.client) {
+		expireTime.value = JSON.parse(localStorage.getItem(EXPIRE_KEY) || '0');
+	}
 
-	// function accessExpired(): boolean {
-	// 	return new Date().getTime() >= expireIn.value;
-	// }
+	function accessExpired(): boolean {
+		return new Date().getTime() >= expireTime.value;
+	}
 
-	// function saveExpireTimestamp(seconds: number): void {
-	// 	expireIn.value = new Date().getTime() + (seconds * 1000) - (10 * 1000);
-	// }
+	function saveExpireTimestamp(seconds: number): void {
+		expireTime.value = new Date().getTime() + seconds * 1000 - 10 * 1000;
 
+		if (import.meta.client) {
+			localStorage.setItem(EXPIRE_KEY, JSON.stringify(expireTime.value));
+		}
+	}
+
+	// State action
 	function login() {
 		redirectToSpotify();
 	}
 
 	function logout(): void {
-		codeVerifierCookie.value = null;
-		accessToken.value = null;
-		refreshTokenCookie.value = null;
-		// expireIn.value = 0;
-		setAuth(false);
+		clearState();
+		navigateTo('/login');
 	}
 
 	async function checkAuth(): Promise<any | void> {
@@ -55,16 +73,36 @@ export const useAuthStore = defineStore('auth', () => {
 		const code = route?.query?.code;
 
 		if (code && route.path === '/login') {
-			return getToken(code as string)
-				.then(() => {
-					return { path: '/', replace: true }
-				})
-		} else {
-			return refreshToken();
+			return getToken(code as string).then(() => {
+				return { path: '/', replace: true };
+			});
+		}
+
+		if (useCookie(REFRESH).value && useCookie(ACCESS).value) {
+			return accessExpired() ? refreshToken() : Promise.resolve().then(() => setAuth(true));
+		}
+
+		return Promise.reject('Пользователь не авторизован');
+	}
+
+	function saveTokens(authServerRes: any): void {
+		saveExpireTimestamp(authServerRes.expires_in);
+		accessToken.value = authServerRes.access_token;
+		if (authServerRes.refresh_token) {
+			refreshTokenCookie.value = authServerRes.refresh_token;
 		}
 	}
 
+	function clearState() {
+		codeVerifierCookie.value = null;
+		accessToken.value = null;
+		refreshTokenCookie.value = null;
+		expireTime.value = 0;
+		localStorage.removeItem(EXPIRE_KEY);
+		setAuth(false);
+	}
 
+	// Soptify API Calls
 	function redirectToSpotify() {
 		codeVerifierCookie.value = generateRandomString(64);
 
@@ -74,7 +112,7 @@ export const useAuthStore = defineStore('auth', () => {
 			const params = {
 				response_type: 'code',
 				client_id: clientId,
-				scope,
+				scope: 'user-read-private user-read-email',
 				code_challenge_method: 'S256',
 				code_challenge: base64Encode(hashed),
 				redirect_uri: redirectUrl,
@@ -88,81 +126,63 @@ export const useAuthStore = defineStore('auth', () => {
 		});
 	}
 
-
-	// Soptify API Calls
 	async function getToken(code: string): Promise<any> {
 		const body = new URLSearchParams({
 			client_id: clientId,
 			grant_type: 'authorization_code',
 			code,
 			redirect_uri: redirectUrl,
-			code_verifier: codeVerifierCookie.value,
-		} as any);
+			code_verifier: codeVerifierCookie.value || '',
+		});
 
-		return $fetch(tokenEndpoint, {
+		return $fetch('/api/auth/token', {
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/x-www-form-urlencoded',
-			},
-			body: body,
+			body,
 		})
 			.then((response: any) => {
-				console.log('token from getToken', response);
-				// saveExpireTimestamp(response.expires_in);
-				accessToken.value = response.access_token;
-				refreshTokenCookie.value = response.refresh_token;
+				saveTokens(response);
 				setAuth(true);
-
-				useCookie('code_verifier').value = null;
+				useCookie(VERIFIER).value = null;
 			})
 			.catch((e) => {
-				console.log('e from getToken', e);
 				setAuth(false);
 				throw e;
 			});
 	}
 
 	async function refreshToken(): Promise<any> {
-		if (useCookie('refresh_token').value) {
-			return $fetch(tokenEndpoint, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/x-www-form-urlencoded',
-				},
-				body: new URLSearchParams({
-					client_id: clientId,
-					grant_type: 'refresh_token',
-					refresh_token: useCookie('refresh_token').value,
-				} as any),
+		const refreshToken = useCookie(REFRESH).value;
+
+		if (!refreshToken) return Promise.reject('User not authorised!');
+
+		const body = new URLSearchParams({
+			client_id: clientId,
+			grant_type: REFRESH,
+			refresh_token: refreshToken,
+		});
+
+		return $fetch('/api/auth/token', {
+			method: 'POST',
+			body,
+		})
+			.then((response: any) => {
+				saveTokens(response);
+				setAuth(true);
 			})
-				.then((response: any) => {
-					console.log('refreshToken()', response);
-					// saveExpireTimestamp(response.expires_in);
-					accessToken.value = response.access_token;
-					if (response.refresh_token) {
-						refreshTokenCookie.value = response.refresh_token;
-					}
-					setAuth(true);
-				})
-				.catch((e) => {
-					console.log('Ошибка обновления токенов: ', e);
-					setAuth(false);
-					throw e;
-				});
-		} else {
-			return Promise.reject('Вы не авторизованы')
-		}
+			.catch((e) => {
+				setAuth(false);
+				throw e;
+			});
 	}
 
 	return {
 		login,
-		// getToken,
+		getToken,
 		logout,
 		isAuth,
 		refreshToken,
 		accessToken,
-		// accessExpired,
-		checkAuth
+		checkAuth,
 	};
 });
 
