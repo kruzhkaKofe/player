@@ -1,7 +1,6 @@
 export const useAuthStore = defineStore('auth', () => {
 	const config = useRuntimeConfig();
 
-	const clientId = config.public.CLIENT_ID;
 	const redirectUrl = config.public.REDIRECT_URL;
 	const spotifyAuthBaseUrl = config.public.SPOTIFY_AUTH_BASE;
 	const authorizationEndpoint = spotifyAuthBaseUrl + '/authorize';
@@ -9,6 +8,12 @@ export const useAuthStore = defineStore('auth', () => {
 	const scope = 'user-read-private user-read-email';
 
 	const codeVerifierCookie = useCookie<string | null>('code_verifier', {
+	let clientId: string = '';
+
+	useFetch('/api/auth/client').then(({ data }) => {
+		if (data.value?.id) clientId = data.value.id;
+	});
+
 		default: () => null,
 	});
 
