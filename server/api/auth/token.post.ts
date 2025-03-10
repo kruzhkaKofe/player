@@ -1,25 +1,46 @@
-export default defineEventHandler(async (event) => {
-	const config = useRuntimeConfig();
-	const tokenEndpoint = config.public.SPOTIFY_ACCOUNTS_URL + '/api/token';
+import { TokensSchema, Tokens, GetTokenBody, RefreshTokenBody } from '~/types/auth.types';
+import type { H3Event } from 'h3';
 
-	const body = new URLSearchParams(await readBody(event));
+const config = useRuntimeConfig();
 
-	if (!body || body.toString().length === 0) {
-		throw createError({
-			statusCode: 400,
-			statusMessage: 'Body is missing',
+function saveTokens(event: H3Event, tokens: Tokens) {
+	console.log('new Tokens', tokens);
+
+	const { access_token, refresh_token, expires_in } = tokens;
+
+	setCookie(event, 'access_token', access_token, {
+		httpOnly: true,
+		secure: config.public.ENV === 'production',
+		maxAge: expires_in, // 1 hour
+	});
+
+	if (refresh_token) {
+		setCookie(event, 'refresh_token', refresh_token, {
+			httpOnly: true,
+			secure: config.public.ENV === 'production',
+			maxAge: expires_in * 24 * 30, // 1 month
 		});
 	}
+}
 
-	return $fetch(tokenEndpoint, {
+export async function getTokens(context: { event: H3Event; body: GetTokenBody | RefreshTokenBody }) {
+	const { event, body } = context;
+
+	const tokenEndpoint = config.public.SPOTIFY_ACCOUNTS_URL + '/api/token';
+
+	const data = await $fetch(tokenEndpoint, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/x-www-form-urlencoded',
 		},
-		body,
-	})
-		.then((res) => res)
-		.catch((error) => {
-			throw error;
-		});
-});
+		body: new URLSearchParams(body),
+	});
+
+	const tokens = await TokensSchema.safeParseAsync(data);
+
+	if (!tokens.success) throw createError(tokens.error);
+
+	saveTokens(event, tokens.data);
+
+	return true;
+}
