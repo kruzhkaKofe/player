@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
 	if (!refresh_token) {
 		throw createError({
 			statusCode: 401,
-			message: 'Not Jopa',
+			message: 'Not refresh token',
 		});
 	}
 
