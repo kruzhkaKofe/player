@@ -4,8 +4,6 @@ import type { H3Event } from 'h3';
 const config = useRuntimeConfig();
 
 function saveTokens(event: H3Event, tokens: Tokens) {
-	console.log('new Tokens', tokens);
-
 	const { access_token, refresh_token, expires_in } = tokens;
 
 	setCookie(event, 'access_token', access_token, {
