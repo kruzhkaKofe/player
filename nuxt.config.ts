@@ -27,8 +27,10 @@ export default defineNuxtConfig({
 	},
 	runtimeConfig: {
 		public: {
+			ENV: process.env.ENV,
 			REDIRECT_URL: process.env.REDIRECT_URL,
 			SPOTIFY_ACCOUNTS_URL: process.env.SPOTIFY_ACCOUNTS_URL,
+			SPOTIFY_BASE_URL: process.env.SPOTIFY_BASE_URL,
 		},
 		private: {
 			CLIENT_ID: process.env.CLIENT_ID,
