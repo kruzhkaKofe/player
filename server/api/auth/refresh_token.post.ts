@@ -1,18 +1,32 @@
-import { GetTokenBody } from '~/types/auth.types';
-
 export default defineEventHandler(async (event) => {
 	const nitroApp = useNitroApp();
-	const VERIFIER = 'code_verifier';
+
+	const REFRESH = 'refresh_token';
+	const ACCESS = 'access_token';
 
 	const config = useRuntimeConfig();
-	const query = getQuery(event);
 
-	const body: GetTokenBody = {
+	const reqBody = await readBody(event);
+
+	const refresh_token = getCookie(event, REFRESH);
+
+	if (!refresh_token) {
+		throw createError({
+			statusCode: 401,
+			message: 'No refresh token',
+		});
+	}
+
+	if (!reqBody || !reqBody.force) {
+		const access_token = getCookie(event, ACCESS);
+
+		if (access_token) return true;
+	}
+
+	const body = {
 		client_id: config.private.CLIENT_ID,
-		grant_type: 'authorization_code',
-		code: query.code as string,
-		redirect_uri: config.public.REDIRECT_URL,
-		code_verifier: getCookie(event, VERIFIER) || '',
+		grant_type: REFRESH,
+		refresh_token,
 	} as const;
 
 	try {
@@ -30,8 +44,6 @@ export default defineEventHandler(async (event) => {
 				appendHeader(event, 'set-cookie', cookie);
 			});
 		}
-
-		deleteCookie(event, VERIFIER);
 
 		return responce;
 	} catch (e) {
