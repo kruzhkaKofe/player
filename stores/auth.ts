@@ -97,8 +97,10 @@ export const useAuthStore = defineStore('auth', () => {
 
 	async function refreshToken(): Promise<void> {
 		try {
-			const responce = await $fetch('/api/auth/refresh_token');
-			setAuth(responce);
+			await $fetch('/api/auth/refresh_token', {
+				method: 'POST',
+			});
+			setAuth(true);
 		} catch (e) {
 			setAuth(false);
 			throw e;
