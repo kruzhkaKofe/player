@@ -4,8 +4,7 @@ export const useAuthStore = defineStore('auth', () => {
 	const VERIFIER = 'code_verifier';
 
 	const redirectUrl = config.public.REDIRECT_URL;
-	const spotifyAuthBaseUrl = config.public.SPOTIFY_ACCOUNTS_URL;
-	const authorizationEndpoint = spotifyAuthBaseUrl + '/authorize';
+	const authorizationEndpoint = config.public.SPOTIFY_ACCOUNTS_URL + '/authorize';
 
 	const scope = `
 		user-read-private 
