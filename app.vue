@@ -7,7 +7,7 @@
 
 <script setup lang="ts">
 const authService = useAuthStore();
-const userService = useUserStore();
+const me = useMeStore();
 
 onMounted(() => {
 	console.log('wefwef')
