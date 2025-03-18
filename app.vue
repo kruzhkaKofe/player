@@ -9,17 +9,13 @@
 const authService = useAuthStore();
 const me = useMeStore();
 
-onMounted(() => {
-	console.log('wefwef')
-	authService.checkAuth()
-		.then(redirectTo => {
-			if (redirectTo) {
-				navigateTo(redirectTo);
-			}
-			userService.getUser();
-		})
-		.catch(() => {
-			navigateTo('/login');
-		})
+onMounted(async () => {
+	try {
+		const redirectTo = await authService.checkAuth();
+		if (redirectTo) navigateTo(redirectTo);
+		me.getMe();
+	} catch (e) {
+		navigateTo('/login');
+	}
 });
 </script>
