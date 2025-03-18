@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
 	if (!reqBody || !reqBody.force) {
 		const access_token = getCookie(event, ACCESS);
 
-		if (access_token) return true;
+		if (access_token) return access_token;
 	}
 
 	const body = {
@@ -34,7 +34,6 @@ export default defineEventHandler(async (event) => {
 			url: '/api/auth/token',
 			method: 'POST',
 			body,
-			event,
 		});
 
 		const setCookieHeaders = responce.headers['set-cookie'];
