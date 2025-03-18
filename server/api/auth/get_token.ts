@@ -20,7 +20,6 @@ export default defineEventHandler(async (event) => {
 			url: '/api/auth/token',
 			method: 'POST',
 			body,
-			event,
 		});
 
 		const setCookieHeaders = responce.headers['set-cookie'];
@@ -30,7 +29,6 @@ export default defineEventHandler(async (event) => {
 				appendHeader(event, 'set-cookie', cookie);
 			});
 		}
-
 		deleteCookie(event, VERIFIER);
 
 		return responce;
