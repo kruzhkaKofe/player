@@ -2,9 +2,9 @@ import { createCustomFetch } from '#imports';
 import { meSchema } from '~/types/users.types';
 
 export default defineEventHandler(async (event) => {
-	const $customFetch = createCustomFetch(event);
+	const $f = createCustomFetch(event);
 
-	const data = await $customFetch('/me');
+	const data = await $f('/me');
 
 	const me = await meSchema.safeParseAsync(data);
 
