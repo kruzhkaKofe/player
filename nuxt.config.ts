@@ -36,4 +36,9 @@ export default defineNuxtConfig({
 			CLIENT_ID: process.env.CLIENT_ID,
 		},
 	},
+	app: {
+		head: {
+			title: 'Nuxt Player',
+		},
+	},
 });
